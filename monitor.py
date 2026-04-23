@@ -22,8 +22,8 @@ class Monitor:
 
     def _register_handlers(self):
         """Register the message handler for new channel posts."""
-
-        @self.client.on_message(filters.chat(SOURCE_CHANNEL))
+        from pyrogram.handlers import MessageHandler
+        
         async def on_new_post(client: Client, message: Message):
             logger.info(
                 f"📡 New post detected in source channel! "
@@ -38,6 +38,8 @@ class Monitor:
             }
 
             await self.dispatcher.enqueue(message_data)
+            
+        self.client.add_handler(MessageHandler(on_new_post, filters.chat(SOURCE_CHANNEL)))
 
     async def run(self, client: Client):
         """
