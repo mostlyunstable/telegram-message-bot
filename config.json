@@ -1,9 +1,9 @@
 {
-    "api_id": "1234567",
-    "api_hash": "abc123def456",
-    "phone": "+911234567890",
-    "source_channel": "@test_source",
-    "targets": "@test_channel",
-    "min_delay": 600,
-    "max_delay": 900
+    "api_id": "31426448",
+    "api_hash": "61f53b3baf33c1b849a692c8d6a72f95",
+    "phone": "+917219842558",
+    "source_channel": "-1003820211338",
+    "targets": "@monish030905\r\n@Armedia_007",
+    "min_delay": 5,
+    "max_delay": 10
 }
