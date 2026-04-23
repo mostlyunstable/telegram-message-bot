@@ -32,4 +32,4 @@ Open your browser and go to:
 ## 🔒 Trial Version
 This version is restricted to **5 messages** for validation. After 5 deliveries, the system will lock until the full license is applied.
 
-**Contact the developer for the full version.**
+**Contact Elyndor Interactive for the full version.**
