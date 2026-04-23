@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegram Bot Admin Panel</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0088cc;
+            --bg: #0f172a;
+            --glass: rgba(255, 255, 255, 0.05);
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        body {
+            background: radial-gradient(circle at top right, #1e293b, #0f172a);
+            color: white;
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 600;
+            background: linear-gradient(to right, #38bdf8, #818cf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .status-badge {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            background: var(--glass);
+            border: 1px solid var(--border);
+        }
+
+        .status-online { color: #4ade80; border-color: #4ade80; }
+        .status-offline { color: #f87171; border-color: #f87171; }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .card {
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        }
+
+        .card h2 {
+            font-size: 1.1rem;
+            margin-bottom: 20px;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            color: #cbd5e1;
+        }
+
+        input, textarea {
+            width: 100%;
+            background: rgba(0,0,0,0.2);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px 16px;
+            color: white;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(0, 136, 204, 0.2);
+        }
+
+        .btn {
+            cursor: pointer;
+            border: none;
+            border-radius: 12px;
+            padding: 14px 28px;
+            font-weight: 600;
+            transition: all 0.3s;
+            width: 100%;
+            font-size: 1rem;
+        }
+
+        .btn-primary {
+            background: #0088cc;
+            color: white;
+        }
+
+        .btn-primary:hover { background: #0077b5; transform: translateY(-2px); }
+
+        .btn-stop { background: #ef4444; color: white; margin-top: 10px; }
+
+        .logs-area {
+            grid-column: span 2;
+            background: #000;
+            color: #4ade80;
+            font-family: 'Courier New', Courier, monospace;
+            padding: 20px;
+            border-radius: 16px;
+            font-size: 0.85rem;
+            height: 250px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+        }
+
+        .footer {
+            margin-top: 40px;
+            text-align: center;
+            font-size: 0.8rem;
+            color: #64748b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Bot Admin Panel</h1>
+            <div id="botStatus" class="status-badge {{ 'status-online' if bot_running else 'status-offline' }}">
+                {{ 'RUNNING' if bot_running else 'STOPPED' }}
+            </div>
+        </div>
+
+        <form id="configForm">
+            <div class="grid">
+                <div class="card">
+                    <h2>Account Settings</h2>
+                    <div class="form-group">
+                        <label>API ID</label>
+                        <input type="number" name="api_id" value="{{ config.api_id }}" placeholder="e.g. 1234567">
+                    </div>
+                    <div class="form-group">
+                        <label>API Hash</label>
+                        <input type="text" name="api_hash" value="{{ config.api_hash }}" placeholder="e.g. abc123def456">
+                    </div>
+                    <div class="form-group">
+                        <label>Phone Number</label>
+                        <input type="text" name="phone" value="{{ config.phone }}" placeholder="+91XXXXXXXXXX">
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Operation Settings</h2>
+                    <div class="form-group">
+                        <label>Source Channel (Username or ID)</label>
+                        <input type="text" name="source_channel" value="{{ config.source_channel }}" placeholder="@channel_username">
+                    </div>
+                    <div class="form-group" style="display: flex; gap: 10px;">
+                        <div style="flex: 1;">
+                            <label>Min Delay (sec)</label>
+                            <input type="number" name="min_delay" value="{{ config.min_delay }}">
+                        </div>
+                        <div style="flex: 1;">
+                            <label>Max Delay (sec)</label>
+                            <input type="number" name="max_delay" value="{{ config.max_delay }}">
+                        </div>
+                    </div>
+                    <button type="button" id="saveBtn" class="btn btn-primary" onclick="saveConfig()">Save Configuration</button>
+                </div>
+
+                <div class="card" style="grid-column: span 2;">
+                    <h2>Target Accounts (one per line)</h2>
+                    <textarea name="targets" rows="5" placeholder="@user1\n@user2">{{ config.targets }}</textarea>
+                </div>
+
+                <div class="card" style="grid-column: span 2; display: flex; gap: 20px; align-items: center;">
+                    <div style="flex: 1;">
+                        <h2>Control Center</h2>
+                        <button type="button" id="startBtn" class="btn btn-primary" onclick="startBot()" {{ 'disabled' if bot_running }}>Start Automation</button>
+                        <button type="button" id="stopBtn" class="btn btn-stop" onclick="stopBot()" {{ 'disabled' if not bot_running }}>Stop Bot</button>
+                    </div>
+                    <div style="flex: 2;">
+                        <h2>Live Output</h2>
+                        <div id="logs" class="logs-area">Waiting for bot to start...</div>
+                    </div>
+                </div>
+            </div>
+        </form>
+
+        <div class="footer">
+            &copy; 2026 Premium Automation Solutions | Trial Version v1.2
+        </div>
+    </div>
+
+    <script>
+        async function saveConfig() {
+            const form = document.getElementById('configForm');
+            const formData = new FormData(form);
+            const res = await fetch('/save', { method: 'POST', body: formData });
+            const data = await res.json();
+            alert(data.message);
+        }
+
+        async function startBot() {
+            const res = await fetch('/start', { method: 'POST' });
+            const data = await res.json();
+            if (data.status === 'success') {
+                location.reload();
+            } else {
+                alert(data.message);
+            }
+        }
+
+        async function stopBot() {
+            const res = await fetch('/stop', { method: 'POST' });
+            const data = await res.json();
+            if (data.status === 'success') {
+                location.reload();
+            }
+        }
+
+        // Auto-refresh logs
+        setInterval(async () => {
+            const res = await fetch('/logs');
+            const text = await res.text();
+            const logsDiv = document.getElementById('logs');
+            logsDiv.innerText = text;
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        }, 2000);
+    </script>
+</body>
+</html>

@@ -1,44 +1,35 @@
-# Telegram Multi-Account Bulk Messenger (Trial Version)
+# Telegram Multi-Account Bulk Messenger (Premium Edition)
 
-This professional automation tool monitors a source channel and forwards every new post to a list of 200+ target accounts using multiple sender accounts and randomized delays to bypass spam detection.
+This version includes a **Sleek Web Admin Dashboard** for easy management. No need to edit any code files!
 
-## 🚀 Setup Instructions
+## 🚀 How to Start
 
-### 1. Installation
-Ensure you have Python 3.10+ installed. Then, install the required libraries:
+### 1. Install Dependencies
 ```bash
 pip install -r requirements.txt
+pip install flask
 ```
 
-### 2. Telegram API Credentials
-You need your own API keys to run the bot:
-1. Go to [my.telegram.org](https://my.telegram.org) and log in.
-2. Go to "API development tools" and create a new application.
-3. Copy your `App api_id` and `App api_hash`.
-
-### 3. Configuration
-Open `config.py` and fill in your details:
-- `api_id`: Your API ID.
-- `api_hash`: Your API Hash.
-- `phone`: Your phone number (with country code, e.g., +91...).
-- `SOURCE_CHANNEL`: The numeric ID or username of the channel to watch.
-
-### 4. Target List
-Open `targets.txt` and paste your list of usernames (one per line, e.g., `@username`).
-
-### 5. Running the Bot
-Start the bot by running:
+### 2. Launch the Admin Panel
+Run the following command:
 ```bash
-python main.py
+python app.py
 ```
-On the first run, it will ask for a **Login Code** sent to your Telegram app. Enter it to authorize the session.
+
+### 3. Open the Dashboard
+Open your browser and go to:
+👉 **http://localhost:5000**
+
+## 🛠️ How to Use
+1.  **Configure:** Enter your API ID, API Hash, and Phone Number in the "Account Settings" section.
+2.  **Target List:** Paste your 200+ usernames in the text area at the bottom.
+3.  **Start:** Click **"Start Automation"**.
+    *   *Note: If this is your first time, check your terminal/console to enter the Telegram Login Code.*
+4.  **Monitor:** Watch the **"Live Output"** section to see your messages being delivered in real-time.
 
 ---
 
-## 🔒 Trial Version Limitations
-This version is for **validation and testing only**.
-- Supports up to 5 forwarded messages.
-- Includes full round-robin account rotation and delay logic.
-- After 5 messages, the license will expire.
+## 🔒 Trial Version
+This version is restricted to **5 messages** for validation. After 5 deliveries, the system will lock until the full license is applied.
 
-**Please contact the developer for the full, unlimited license.**
+**Contact the developer for the full version.**
