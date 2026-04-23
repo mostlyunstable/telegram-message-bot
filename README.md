@@ -1,35 +1,43 @@
-# Telegram Multi-Account Bulk Messenger (Premium Edition)
+# Telegram Multi-Account Bulk Messenger (Elyndor Interactive Edition)
 
-This version includes a **Sleek Web Admin Dashboard** for easy management. No need to edit any code files!
+Professional automation tool for monitoring channels and bulk forwarding messages with multiple account rotation and anti-spam protection.
 
-## 🚀 How to Start
+## 🚀 Key Features
+-   **Web Admin Dashboard:** Manage everything from your browser.
+-   **Bulk Account Support:** Use 20+ accounts with a single API ID/Hash.
+-   **Official Forwarding:** Messages show the "Forwarded from..." tag.
+-   **Anti-Spam Security:** Randomized 10-15 minute delays and round-robin rotation.
+-   **Session Manager:** Easily clear and reset logins from the UI.
+
+## 🛠️ Setup Instructions
 
 ### 1. Install Dependencies
 ```bash
 pip install -r requirements.txt
-pip install flask
 ```
 
 ### 2. Launch the Admin Panel
-Run the following command:
+Run:
 ```bash
 python app.py
 ```
 
 ### 3. Open the Dashboard
-Open your browser and go to:
-👉 **http://localhost:5000**
+Go to: 👉 **http://localhost:5000**
 
-## 🛠️ How to Use
-1.  **Configure:** Enter your API ID, API Hash, and Phone Number in the "Account Settings" section.
-2.  **Target List:** Paste your 200+ usernames in the text area at the bottom.
-3.  **Start:** Click **"Start Automation"**.
-    *   *Note: If this is your first time, check your terminal/console to enter the Telegram Login Code.*
-4.  **Monitor:** Watch the **"Live Output"** section to see your messages being delivered in real-time.
+### 4. Configuration
+1.  Enter your **Global API ID** and **API Hash**.
+2.  Paste your **list of Phone Numbers** (one per line).
+3.  Enter the **Source Channel ID** (found in logs after clicking Start).
+4.  Paste your **Target List** (usernames like @user1).
+5.  Click **Save All Configuration**.
+
+### 5. Start Automation
+Click **"🚀 Start Automation"**. 
+*Note: For first-time setup, new terminal windows will appear for each phone number. Enter the Telegram Login Code in each window.*
 
 ---
 
-## 🔒 Trial Version
-This version is restricted to **5 messages** for validation. After 5 deliveries, the system will lock until the full license is applied.
-
-**Contact Elyndor Interactive for the full version.**
+## 🔒 License Notice
+This is a **Trial Version** restricted to **5 messages** for validation purposes. 
+**Contact Elyndor Interactive for the full, unlimited license.**

@@ -1,6 +1,7 @@
 import asyncio
 import os
 import sys
+import traceback
 from pyrogram import Client
 from config import ACCOUNTS, TARGETS_FILE, SOURCE_CHANNEL, MOCK_MODE
 from account_manager import AccountManager
@@ -13,20 +14,27 @@ def load_targets(filepath: str) -> list:
     """Load target usernames/phone numbers from file."""
     if not os.path.exists(filepath):
         logger.error(f"Targets file not found: {filepath}")
-        sys.exit(1)
+        return []
 
     targets = []
     with open(filepath, "r", encoding="utf-8") as f:
         for line in f:
+            # Strip all whitespace including \r and \n
             line = line.strip()
             if line and not line.startswith("#"):
-                targets.append(line)
+                # Convert numeric IDs (like -100xxx) to integers
+                if line.lstrip('-').isdigit():
+                    targets.append(int(line))
+                else:
+                    targets.append(line)
 
     if not targets:
         logger.error("No targets found in targets.txt!")
-        sys.exit(1)
+        return []
 
     logger.info(f"Loaded {len(targets)} targets from {filepath}")
+    for t in targets:
+        logger.info(f"  Target: {t}")
     return targets
 
 
@@ -37,6 +45,9 @@ async def main():
 
     # 1. Load targets
     targets = load_targets(TARGETS_FILE)
+    if not targets:
+        logger.error("No valid targets. Please add targets in the Admin Panel and restart.")
+        return
 
     # 2. Initialize account manager (logs in all sender accounts)
     account_manager = AccountManager()
@@ -89,4 +100,17 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nBot interrupted by user.")
+    except Exception as e:
+        print("\n" + "=" * 55)
+        print("❌ BOT CRASHED WITH ERROR:")
+        print("=" * 55)
+        traceback.print_exc()
+        print("=" * 55)
+    finally:
+        # KEEP THE WINDOW OPEN so the user can read the output
+        print("\n")
+        input("Press ENTER to close this window...")

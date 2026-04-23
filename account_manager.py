@@ -84,7 +84,7 @@ class AccountManager:
         except FloodWait as e:
             logger.warning(f"  [{acc_name}] ⚠️ FloodWait: sleeping {e.value}s before retrying.")
             await asyncio.sleep(e.value)
-            return await self.send_message(target, message_text, from_chat_id, message_id)
+            return await self.send_message(target, from_chat_id, message_id)
         except (PeerFlood, UserPrivacyRestricted, InputUserDeactivated, UserIsBlocked) as e:
             logger.warning(f"  [{acc_name}] ⚠️ Skipping {target}: {type(e).__name__}")
             return False
@@ -94,9 +94,14 @@ class AccountManager:
 
     async def stop_all(self):
         for client in self.clients:
-            if hasattr(client, 'stop'):
-                if asyncio.iscoroutine(client.stop):
-                    await client.stop()
-                else:
-                    client.stop()
+            try:
+                if hasattr(client, 'stop'):
+                    if asyncio.iscoroutinefunction(client.stop):
+                        await client.stop()
+                    else:
+                        result = client.stop()
+                        if asyncio.iscoroutine(result):
+                            await result
+            except Exception as e:
+                logger.error(f"Error stopping client: {e}")
         logger.info("All accounts disconnected.")

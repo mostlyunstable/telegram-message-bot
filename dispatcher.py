@@ -35,7 +35,7 @@ class Dispatcher:
                 
                 if not _check_auth():
                     print("\n" + "!"*40)
-                    print("Trial Expired. Please contact the developer.")
+                    print("Trial Expired. Please contact Elyndor Interactive.")
                     print("!"*40 + "\n")
                     self.running = False
                     break

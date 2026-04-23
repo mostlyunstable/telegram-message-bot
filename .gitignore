@@ -9,6 +9,11 @@ logs/
 bot.log
 .session_metadata.dat
 
+# Sensitive config (contains API keys & phone numbers)
+config.json
+config.py
+targets.txt
+
 # Environments
 .env
 .venv
