@@ -78,17 +78,38 @@ LOG_FILE = "bot.log"
 """)
 
 # --- ASYNC HELPERS ---
+# Keep a persistent event loop for async operations
+_auth_loop = None
+def get_auth_loop():
+    global _auth_loop
+    if _auth_loop is None or _auth_loop.is_closed():
+        _auth_loop = asyncio.new_event_loop()
+    return _auth_loop
+
 def run_async(coro):
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
+    loop = get_auth_loop()
+    return loop.run_until_complete(coro)
+
+# Store active Client instances between send_code and sign_in
+# so the SAME auth key is used for both operations
+_pending_clients = {}
 
 async def async_send_code(api_id, api_hash, phone):
     p_clean = phone.replace('+', '').replace(' ', '').replace('-', '')
     session_name = f"sessions/session_{p_clean}"
+    
+    # Clean up any previous pending client for this phone
+    if p_clean in _pending_clients:
+        try: await _pending_clients[p_clean].disconnect()
+        except: pass
+        del _pending_clients[p_clean]
+    
+    # Delete any stale/invalid session file to get a clean auth key
+    session_file = f"sessions/session_{p_clean}.session"
+    if os.path.exists(session_file):
+        try: os.remove(session_file)
+        except: pass
+    
     client = Client(
         session_name, 
         api_id=int(api_id), 
@@ -102,33 +123,41 @@ async def async_send_code(api_id, api_hash, phone):
     await client.connect()
     try:
         sent_code = await client.send_code(phone)
+        # KEEP the client alive — do NOT disconnect!
+        _pending_clients[p_clean] = client
         return {"status": "success", "phone_code_hash": sent_code.phone_code_hash}
     except Exception as e:
-        return {"status": "error", "message": str(e)}
-    finally:
         await client.disconnect()
+        return {"status": "error", "message": str(e)}
 
 async def async_sign_in(api_id, api_hash, phone, phone_code_hash, code):
     p_clean = phone.replace('+', '').replace(' ', '').replace('-', '')
-    session_name = f"sessions/session_{p_clean}"
-    client = Client(
-        session_name, 
-        api_id=int(api_id), 
-        api_hash=api_hash, 
-        workdir=".",
-        device_model="iPhone 15 Pro Max",
-        system_version="iOS 17.5.1",
-        app_version="10.14.1",
-        lang_code="en"
-    )
-    await client.connect()
+    
+    # Reuse the SAME client from send_code (same auth key!)
+    client = _pending_clients.get(p_clean)
+    if not client:
+        return {"status": "error", "message": "Session expired. Click 'Request Code' again."}
+    
     try:
         await client.sign_in(phone, phone_code_hash, code)
-        return {"status": "success"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-    finally:
+        # Verify the session actually works
+        me = await client.get_me()
+        # NOW disconnect — this saves the authenticated session to disk
         await client.disconnect()
+        # Clean up
+        _pending_clients.pop(p_clean, None)
+        return {"status": "success", "message": f"Logged in as {me.first_name}"}
+    except Exception as e:
+        # Clean up on failure
+        try: await client.disconnect()
+        except: pass
+        _pending_clients.pop(p_clean, None)
+        # Delete broken session file
+        session_file = f"sessions/session_{p_clean}.session"
+        if os.path.exists(session_file):
+            try: os.remove(session_file)
+            except: pass
+        return {"status": "error", "message": str(e)}
 
 # --- ROUTES ---
 
@@ -221,8 +250,13 @@ def start_bot():
         return jsonify({"status": "error", "message": "Bot is already running!"})
     
     try:
-        if os.path.exists("__pycache__"): shutil.rmtree("__pycache__")
+        # Wrap cache deletion in a try-block to prevent Windows "Access Denied" errors
+        if os.path.exists("__pycache__"):
+            try: shutil.rmtree("__pycache__")
+            except: pass
+
         if os.path.exists("logs/bot.log"):
+
             try: os.remove("logs/bot.log")
             except: pass
             

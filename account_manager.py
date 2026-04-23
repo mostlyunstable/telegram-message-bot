@@ -64,7 +64,8 @@ class AccountManager:
             self.clients.append(client)
             logger.info(f"  ✅ Logged in as: {name} ({me.first_name})")
         except Exception as e:
-            logger.error(f"  ❌ Auth Error for {name}: Please authenticate this account in the Web Panel.")
+            logger.error(f"  ❌ Auth Error for {name}: {type(e).__name__}: {e}")
+            logger.error(f"     → Please authenticate this account in the Web Panel.")
             try: await client.disconnect() 
             except: pass
     async def _mock_init(self, config):
