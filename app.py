@@ -103,9 +103,17 @@ def save_config(config):
 # ──────────────────────────────────────────────
 # ASYNC HELPERS (OTP FLOW)
 # ──────────────────────────────────────────────
-def run_async(coro):
-    return asyncio.run(coro)
+_AUTH_LOOP = asyncio.new_event_loop()
+def _start_auth_loop():
+    asyncio.set_event_loop(_AUTH_LOOP)
+    _AUTH_LOOP.run_forever()
+threading.Thread(target=_start_auth_loop, daemon=True).start()
 
+def run_async(coro):
+    future = asyncio.run_coroutine_threadsafe(coro, _AUTH_LOOP)
+    return future.result()
+
+_AUTH_CLIENTS = {}
 
 async def async_send_code(api_id, api_hash, phone):
     p_clean = phone.replace("+", "").replace(" ", "").replace("-", "")
@@ -116,13 +124,15 @@ async def async_send_code(api_id, api_hash, phone):
             os.remove(session_file)
         except Exception:
             pass
+
     client = Client(session_name, api_id=int(api_id), api_hash=api_hash, workdir=".",
                     device_model="iPhone 15 Pro Max", system_version="iOS 17.5.1",
                     app_version="10.14.1", lang_code="en")
     await client.connect()
     try:
         sent = await client.send_code(phone)
-        await client.disconnect()
+        # Keep client connected in memory for sign_in
+        _AUTH_CLIENTS[p_clean] = client
         return {"status": "success", "phone_code_hash": sent.phone_code_hash}
     except Exception as e:
         await client.disconnect()
@@ -132,20 +142,23 @@ async def async_send_code(api_id, api_hash, phone):
 async def async_sign_in(api_id, api_hash, phone, phone_code_hash, code):
     p_clean = phone.replace("+", "").replace(" ", "").replace("-", "")
     session_name = f"sessions/session_{p_clean}"
-    client = Client(session_name, api_id=int(api_id), api_hash=api_hash, workdir=".",
-                    device_model="iPhone 15 Pro Max", system_version="iOS 17.5.1",
-                    app_version="10.14.1", lang_code="en")
-    await client.connect()
+    
+    client = _AUTH_CLIENTS.get(p_clean)
+    if not client:
+        return {"status": "error", "message": "Session expired. Please request OTP again."}
+        
     try:
         await client.sign_in(phone, phone_code_hash, code)
         me = await client.get_me()
         await client.disconnect()
+        _AUTH_CLIENTS.pop(p_clean, None)
         return {"status": "success", "message": f"Logged in as {me.first_name}"}
     except Exception as e:
         try:
             await client.disconnect()
         except Exception:
             pass
+        _AUTH_CLIENTS.pop(p_clean, None)
         session_file = f"{session_name}.session"
         if os.path.exists(session_file):
             try:
