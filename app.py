@@ -5,16 +5,45 @@ import shutil
 import time
 import sys
 import asyncio
+from collections import defaultdict
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from functools import wraps
 from pyrogram import Client
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
-app.secret_key = "ELYNDOR_SECRET_KEY_123"
+app.secret_key = os.environ.get("SECRET_KEY", "ARMEDIAS_PRODUCTION_KEY_2026_SECURE")
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # --- AUTHENTICATION ---
-ADMIN_USER = "admin"
-ADMIN_PASS = "elyndor2026"
+ADMIN_USER = os.environ.get("ADMIN_USER", "admin")
+_ADMIN_PASS_HASH = generate_password_hash(os.environ.get("ADMIN_PASS", "telegram2026"))
+
+# --- BRUTE FORCE PROTECTION ---
+_login_attempts = defaultdict(list)
+MAX_LOGIN_ATTEMPTS = 5
+LOCKOUT_DURATION = 900  # 15 minutes
+
+def _get_client_ip():
+    return request.headers.get('X-Forwarded-For', request.remote_addr or '127.0.0.1')
+
+def _is_locked_out(ip):
+    now = time.time()
+    _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < LOCKOUT_DURATION]
+    return len(_login_attempts[ip]) >= MAX_LOGIN_ATTEMPTS
+
+def _get_lockout_remaining(ip):
+    if not _login_attempts[ip]:
+        return 0
+    oldest = _login_attempts[ip][0]
+    return max(0, int(LOCKOUT_DURATION - (time.time() - oldest)))
+
+def _record_failed_login(ip):
+    _login_attempts[ip].append(time.time())
+
+def _clear_login_attempts(ip):
+    _login_attempts.pop(ip, None)
 
 def login_required(f):
     @wraps(f)
@@ -164,10 +193,30 @@ async def async_sign_in(api_id, api_hash, phone, phone_code_hash, code):
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        if request.form.get("username") == ADMIN_USER and request.form.get("password") == ADMIN_PASS:
+        ip = _get_client_ip()
+
+        # Check if IP is locked out
+        if _is_locked_out(ip):
+            remaining = _get_lockout_remaining(ip)
+            mins, secs = divmod(remaining, 60)
+            return render_template("login.html", error=f"Too many failed attempts. Try again in {mins}m {secs}s.")
+
+        username = request.form.get("username")
+        password = request.form.get("password")
+
+        if username == ADMIN_USER and check_password_hash(_ADMIN_PASS_HASH, password):
             session['logged_in'] = True
+            _clear_login_attempts(ip)
             return redirect(url_for('index'))
-        return render_template("login.html", error="Invalid credentials")
+
+        # Record failed attempt
+        _record_failed_login(ip)
+        attempts_left = MAX_LOGIN_ATTEMPTS - len(_login_attempts[ip])
+        if attempts_left <= 0:
+            remaining = _get_lockout_remaining(ip)
+            mins = remaining // 60
+            return render_template("login.html", error=f"Account locked for {mins} minutes.")
+        return render_template("login.html", error=f"Invalid credentials. {attempts_left} attempts remaining.")
     return render_template("login.html")
 
 @app.route("/logout")
@@ -291,6 +340,30 @@ def clear_sessions():
         return jsonify({"status": "success", "message": "All session files cleared!"})
     return jsonify({"status": "success", "message": "No sessions to clear."})
 
+@app.route("/api/auth/logout_account", methods=["POST"])
+@login_required
+def logout_account():
+    phone = request.form.get("phone")
+    if not phone:
+        return jsonify({"status": "error", "message": "No phone number provided"})
+
+    p_clean = phone.replace('+', '').replace(' ', '').replace('-', '')
+    session_file = f"sessions/session_{p_clean}.session"
+    journal_file = f"sessions/session_{p_clean}.session-journal"
+
+    removed = False
+    for f in [session_file, journal_file]:
+        if os.path.exists(f):
+            try:
+                os.remove(f)
+                removed = True
+            except Exception as e:
+                return jsonify({"status": "error", "message": f"Failed: {e}"})
+
+    if removed:
+        return jsonify({"status": "success", "message": f"Logged out {phone} successfully"})
+    return jsonify({"status": "success", "message": f"{phone} was not logged in"})
+
 @app.route("/logs")
 @login_required
 def get_logs():
@@ -303,4 +376,5 @@ def get_logs():
     return "Ready. Waiting for first message..."
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5050, debug=False)
+    port = int(os.environ.get("PORT", 5050))
+    app.run(host="0.0.0.0", port=port, debug=False)

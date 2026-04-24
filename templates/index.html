@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Telegram Bot Admin Panel</title>
+    <title>ARMEDIAS — Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -41,9 +41,11 @@
 
         .header h1 {
             font-size: 2rem;
-            font-weight: 600;
-            background: linear-gradient(to right, #38bdf8, #818cf8);
+            font-weight: 700;
+            letter-spacing: 2px;
+            background: linear-gradient(135deg, #38bdf8, #818cf8, #c084fc);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
@@ -165,7 +167,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>Bot Admin Panel</h1>
+            <h1>ARMEDIAS</h1>
             <div style="display: flex; align-items: center; gap: 15px;">
                 <div id="botStatus" class="status-badge {{ 'status-online' if bot_running else 'status-offline' }}">
                     {{ 'RUNNING' if bot_running else 'STOPPED' }}
@@ -192,11 +194,13 @@
                     {% endif %}
                 </div>
                 
-                {% if not acc.authenticated %}
                 <div style="display: flex; gap: 10px; align-items: center;" id="auth-controls-{{ acc.clean_phone }}">
+                {% if acc.authenticated %}
+                    <button type="button" class="btn" style="background: #ef4444; color: white; padding: 8px 16px; width: auto;" onclick="logoutAccount('{{ acc.phone }}', '{{ acc.clean_phone }}')">Logout</button>
+                {% else %}
                     <button type="button" class="btn btn-primary" style="padding: 8px 16px; width: auto;" onclick="requestOTP('{{ acc.phone }}', '{{ acc.clean_phone }}')">Request Code</button>
-                </div>
                 {% endif %}
+                </div>
             </div>
             {% endfor %}
         </div>
@@ -218,7 +222,6 @@
                     <h2 style="margin-top: 30px;">Sender Accounts</h2>
                     <label>Phone Numbers (one per line, e.g. +91XXXXXXXXXX)</label>
                     <textarea name="phones" rows="6" placeholder="+917219842558\n+917219842559">{{ config.phones }}</textarea>
-                    <button type="button" class="btn btn-clear" onclick="clearSessions()">🧹 Clear All Session Data</button>
                 </div>
 
                 <div class="card">
@@ -262,7 +265,7 @@
         </form>
 
         <div class="footer">
-            &copy; 2026 Elyndor Interactive | Premium Automation Solutions
+            &copy; 2026 ARMEDIAS | Premium Automation Solutions
         </div>
     </div>
 
@@ -368,12 +371,16 @@
             }
         }
 
-        async function clearSessions() {
-            if (confirm("Are you sure? This will log out all accounts.")) {
-                const res = await fetch('/clear_sessions', { method: 'POST' });
+        async function logoutAccount(phone, cleanPhone) {
+            if (confirm("Are you sure you want to log out " + phone + "?")) {
+                const formData = new FormData();
+                formData.append('phone', phone);
+                const res = await fetch('/api/auth/logout_account', { method: 'POST', body: formData });
                 const data = await res.json();
                 alert(data.message);
-                location.reload();
+                if (data.status === 'success') {
+                    location.reload();
+                }
             }
         }
 

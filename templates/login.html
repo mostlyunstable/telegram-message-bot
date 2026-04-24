@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Bot Admin</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <title>ARMEDIAS — Admin Panel</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --primary: #0088cc;
@@ -36,17 +36,28 @@
             border-radius: 24px;
             padding: 40px;
             width: 100%;
-            max-width: 400px;
+            max-width: 420px;
             box-shadow: 0 20px 40px rgba(0,0,0,0.4);
             text-align: center;
         }
 
-        h1 {
-            font-size: 1.5rem;
-            margin-bottom: 30px;
-            background: linear-gradient(to right, #38bdf8, #818cf8);
+        .brand-name {
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: 6px;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #38bdf8, #818cf8, #c084fc);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            color: #64748b;
+            margin-bottom: 30px;
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
         }
 
         .form-group {
@@ -75,10 +86,11 @@
         input:focus {
             outline: none;
             border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(0, 136, 204, 0.2);
         }
 
         .btn {
-            background: var(--primary);
+            background: linear-gradient(135deg, #0088cc, #6366f1);
             color: white;
             border: none;
             border-radius: 12px;
@@ -88,40 +100,59 @@
             cursor: pointer;
             transition: all 0.3s;
             margin-top: 10px;
+            font-size: 1rem;
         }
 
         .btn:hover {
-            background: #0077b5;
             transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 136, 204, 0.3);
         }
 
         .error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
             color: #f87171;
             font-size: 0.85rem;
             margin-bottom: 20px;
+            padding: 10px 14px;
+            border-radius: 10px;
+        }
+
+        .security-badge {
+            margin-top: 24px;
+            font-size: 0.75rem;
+            color: #475569;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
         }
     </style>
 </head>
 <body>
     <div class="login-card">
-        <h1>Elyndor Interactive</h1>
-        <p style="color: #64748b; margin-bottom: 20px; font-size: 0.9rem;">Protected Admin Panel</p>
+        <div class="brand-name">ARMEDIAS</div>
+        <div class="subtitle">Secure Admin Panel</div>
         
         {% if error %}
-        <div class="error">{{ error }}</div>
+        <div class="error">🔒 {{ error }}</div>
         {% endif %}
 
         <form method="POST">
             <div class="form-group">
                 <label>Username</label>
-                <input type="text" name="username" required>
+                <input type="text" name="username" required autocomplete="username">
             </div>
             <div class="form-group">
                 <label>Password</label>
-                <input type="password" name="password" required>
+                <input type="password" name="password" required autocomplete="current-password">
             </div>
             <button type="submit" class="btn">Login to Dashboard</button>
         </form>
+
+        <div class="security-badge">
+            🛡️ Protected by brute-force detection
+        </div>
     </div>
 </body>
 </html>
