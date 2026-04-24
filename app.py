@@ -5,6 +5,13 @@ import shutil
 import time
 import sys
 import asyncio
+
+# --- FIX FOR RENDER/GUNICORN EVENT LOOP ISSUE ---
+try:
+    asyncio.get_event_loop()
+except RuntimeError:
+    asyncio.set_event_loop(asyncio.new_event_loop())
+
 from collections import defaultdict
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from functools import wraps
