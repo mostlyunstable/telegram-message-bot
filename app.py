@@ -16,6 +16,13 @@ app.secret_key = os.environ.get("SECRET_KEY", "ARMEDIAS_PRODUCTION_KEY_2026_SECU
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
+# Ensure required directories exist for Render
+for folder in ["sessions", "logs"]:
+    if not os.path.exists(folder):
+        os.makedirs(folder, exist_ok=True)
+
+print("🚀 ARMEDIAS App Loading...")
+
 # --- AUTHENTICATION ---
 ADMIN_USER = os.environ.get("ADMIN_USER", "admin")
 _ADMIN_PASS_HASH = generate_password_hash(os.environ.get("ADMIN_PASS", "telegram2026"))
