@@ -1,7 +1,7 @@
 import asyncio
 import itertools
 from pyrogram import Client
-from pyrogram.errors import FloodWait, PeerFlood, UserPrivacyRestricted, RPCError
+from pyrogram.errors import FloodWait, PeerFlood, UserPrivacyRestricted, RPCError, AuthKeyUnregistered
 from logger import logger
 from config import MOCK_MODE
 
@@ -35,7 +35,7 @@ class AccountManager:
                 lang_code="en"
             )
             # Trigger code request
-            tasks.append(asyncio.create_task(self._start_client_safely(client, config['name'])))
+            tasks.append(asyncio.create_task(self._start_client_safely(client, config['name'], config["session_name"])))
             
             # SMALL DELAY: Prevents Telegram from blocking simultaneous requests
             await asyncio.sleep(5)
@@ -50,8 +50,9 @@ class AccountManager:
         self._cycle = itertools.cycle(self.clients)
         logger.info(f"Account pool ready with {len(self.clients)} account(s).")
 
-    async def _start_client_safely(self, client, name):
+    async def _start_client_safely(self, client, name, session_path):
         """Helper to start client and add to pool without terminal prompts."""
+        import os
         try:
             # Step 1: Raw connection to check auth status silently
             await client.connect()
@@ -63,6 +64,20 @@ class AccountManager:
             await client.start()
             self.clients.append(client)
             logger.info(f"  ✅ Logged in as: {name} ({me.first_name})")
+        except AuthKeyUnregistered:
+            logger.error(f"  ❌ Auth Error for {name}: Session expired or revoked.")
+            logger.error(f"     → Automatically deleting broken session file...")
+            try: await client.disconnect()
+            except: pass
+            
+            try:
+                # Client name is the session path without .session
+                session_file = f"{session_path}.session"
+                if os.path.exists(session_file):
+                    os.remove(session_file)
+                logger.info(f"     → Session file deleted. Please re-authenticate in the Web Panel.")
+            except Exception as delete_error:
+                logger.error(f"     → Failed to delete session file: {delete_error}")
         except Exception as e:
             logger.error(f"  ❌ Auth Error for {name}: {type(e).__name__}: {e}")
             logger.error(f"     → Please authenticate this account in the Web Panel.")

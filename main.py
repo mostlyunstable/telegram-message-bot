@@ -2,6 +2,13 @@ import asyncio
 import os
 import sys
 import traceback
+
+# --- FIX FOR RENDER EVENT LOOP ISSUE ---
+try:
+    asyncio.get_event_loop()
+except RuntimeError:
+    asyncio.set_event_loop(asyncio.new_event_loop())
+
 from pyrogram import Client
 from config import ACCOUNTS, TARGETS_FILE, SOURCE_CHANNEL, MOCK_MODE
 from account_manager import AccountManager
