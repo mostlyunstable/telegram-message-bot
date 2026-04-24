@@ -6,7 +6,7 @@ services:
     container_name: armedias_dashboard
     restart: unless-stopped
     ports:
-      - "5000:5000"
+      - "5001:5000"
     volumes:
       # Persist sessions and logs across container restarts
       - ./sessions:/app/sessions
