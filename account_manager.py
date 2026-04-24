@@ -91,8 +91,15 @@ class AccountManager:
             logger.info(f"  ✅ [{name}] Logged in as {me.first_name} ({me.id})")
             return AccountWorker(client, name, index, targets)
         except (AuthKeyUnregistered, SessionRevoked) as e:
-            logger.error(f"  ❌ [{name}] Session invalid: {type(e).__name__}")
+            logger.error(f"  ❌ [{name}] Session invalid: {type(e).__name__}. Deleting corrupted session.")
             await self._safe_disconnect(client)
+            # Delete the invalid session file so the dashboard resets to Auth Required
+            session_file = f"{cfg['session_name']}.session"
+            if os.path.exists(session_file):
+                try:
+                    os.remove(session_file)
+                except Exception:
+                    pass
             return None
         except Exception as e:
             logger.error(f"  ❌ [{name}] Init failed: {type(e).__name__}: {e}")
