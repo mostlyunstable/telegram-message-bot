@@ -32,6 +32,11 @@ class BotManager:
                 if p_clean in self.workers:
                     continue
                     
+                # SAFETY GUARD: Ensure global API ID is set before trying to initialize
+                if not config.get("api_id") or not config.get("api_hash"):
+                    logger.warning(f"ℹ️ {phone}: Skipping initialization. Global API ID/Hash not set in Config.")
+                    continue
+
                 session_file = f"{session_dir}/session_{p_clean}"
                 if os.path.exists(f"{session_file}.session"):
                     logger.info(f"🔍 Found session for {phone}. Initializing...")
@@ -84,7 +89,8 @@ class BotManager:
         return worker
 
     def get_all_status(self) -> List[dict]:
-        return [w.to_dict() for w in self.workers.values()]
+        # Thread-safe snapshot to avoid 'dictionary changed size during iteration'
+        return [w.to_dict() for w in list(self.workers.values())]
 
     def _clean_id(self, phone: str) -> str:
         return "".join(filter(str.isdigit, str(phone)))

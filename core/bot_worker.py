@@ -42,13 +42,13 @@ class BotWorker:
         self._dispatch_lock = asyncio.Lock()
         
         # State tracking
-        self.current_msg_id = None
-        self.current_from_chat = None
+        # Idempotency & Coordination
+        self.last_processed_msg = None
+        self._handler = None
         self._new_msg_event = asyncio.Event()
-        self.cooldown_until = 0.0
 
     async def start(self):
-        """Bug Fix 5: Ensure no duplicate starts and return safe response."""
+        """Ensure no duplicate starts and return safe response."""
         if self.is_running:
             return False, "Already running"
         
@@ -103,22 +103,46 @@ class BotWorker:
         async def on_new_message(client, message: Message):
             await self.trigger_dispatch(message.chat.id, message.id)
             
-        self.client.add_handler(handlers.MessageHandler(on_new_message, filters.create(dynamic_filter)), group=1)
+        self._handler = handlers.MessageHandler(on_new_message, filters.create(dynamic_filter))
+        self.client.add_handler(self._handler, group=1)
 
     async def _remove_monitor(self):
-        if self.client.is_connected:
-            try: self.client.remove_handler(None, group=1)
+        if self.client.is_connected and self._handler:
+            try: 
+                self.client.remove_handler(self._handler, group=1)
+                self._handler = None
             except: pass
 
     async def trigger_dispatch(self, from_chat_id: int, message_id: int):
-        """Bug Fix 6: Prevent duplicate triggers using a lock."""
+        """Idempotent dispatch trigger with Queue Flushing."""
         async with self._dispatch_lock:
+            # 1. Idempotency Guard
+            if message_id and self.last_processed_msg == message_id:
+                return True
+                
             if not self.targets:
                 await self.progress.set_action("Error: No targets")
                 return False
                 
+            # 2. Queue Flush: Prevent duplicates by clearing pending sends
+            while not self.queue.empty():
+                try: self.queue.get_nowait()
+                except: break
+                
+            self.last_processed_msg = message_id
             self.current_msg_id = message_id
             self.current_from_chat = from_chat_id
+            
+            # 3. Queue up new targets
+            for target in self.targets:
+                await self.queue.put(target)
+                
+            # 4. Trigger scheduler reset
+            self._new_msg_event.set()
+            if self.is_running and not self.scheduler.is_running:
+                await self._start_scheduler()
+            
+            return True
             
             # Reset progress tracking for new batch
             await self.progress.reset(len(self.targets))

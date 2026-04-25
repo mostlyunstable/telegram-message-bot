@@ -1,38 +1,62 @@
 /**
- * ARMEDIAS AI — Frontend Controller (JWT Hardened)
+ * ARMEDIAS AI — Production Frontend Controller (Hardened)
+ * ──────────────────────────────────────────────────────
  */
 
 const socket = io();
 let currentAccounts = [];
 
-// 1. JWT AUTH GUARD
+// ──────────────────────────────────────────────
+// 1. AUTHENTICATION & APP INITIALIZATION
+// ──────────────────────────────────────────────
+
 function checkAuth() {
     const token = localStorage.getItem('token');
     if (!token && window.location.pathname !== '/login') {
         window.location.href = '/login';
+        return null;
     }
     return token;
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     const token = checkAuth();
     if (token) {
-        socket.emit('request_sync');
+        setLoading(true);
+        await forceInitialSync();
+        setLoading(false);
+        
+        socket.on('status_update', (data) => {
+            currentAccounts = data.accounts || [];
+            renderDashboard(currentAccounts);
+            updateGlobalStats(currentAccounts);
+        });
+
         refreshLogs();
+        setInterval(refreshLogs, 5000);
     }
 });
 
-socket.on('status_update', (data) => {
-    currentAccounts = data.accounts || [];
-    renderDashboard(currentAccounts);
-    updateGlobalStats(currentAccounts);
-});
+function setLoading(active) {
+    const loader = document.getElementById('global-loader');
+    if (loader) loader.style.display = active ? 'block' : 'none';
+}
 
-// 2. CENTRALIZED API CALL WITH JWT
+async function forceInitialSync() {
+    const data = await apiCall('/api/dashboard/sync');
+    if (data && data.status === 'success') {
+        currentAccounts = data.accounts || [];
+        renderDashboard(currentAccounts);
+        updateGlobalStats(currentAccounts);
+    }
+}
+
+// ──────────────────────────────────────────────
+// 2. CORE API INTERFACE
+// ──────────────────────────────────────────────
+
 async function apiCall(url, options = {}) {
     const token = localStorage.getItem('token');
-    
-    // Default headers
     const headers = {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
@@ -43,38 +67,42 @@ async function apiCall(url, options = {}) {
         const response = await fetch(url, { ...options, headers });
         
         if (response.status === 401) {
-            console.error("JWT Expired or Invalid. Redirecting to login.");
             localStorage.removeItem('token');
             window.location.href = '/login';
-            return;
+            return { status: 'error', message: 'Unauthorized' };
         }
 
-        return await response.json();
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.indexOf("application/json") !== -1) {
+            return await response.json();
+        } else {
+            return { status: 'success', text: await response.text() };
+        }
     } catch (e) {
-        console.error("API Connection Error:", e);
-        toast('Connection lost', 'err');
+        console.error("API Error:", e);
         return { status: 'error', message: 'Connection lost' };
     }
 }
 
-// 3. DASHBOARD LOGIC
-function updateGlobalStats(accounts) {
-    const stats = { total: accounts.length, active: accounts.filter(a => a.is_running).length, sent: accounts.reduce((s, a) => s + (a.sent || 0), 0), errors: accounts.reduce((s, a) => s + (a.errors || 0), 0) };
-    const mapping = { 'statTotal': stats.total, 'statActive': stats.active, 'statSent': stats.sent, 'statErrors': stats.errors };
-    for (const [id, val] of Object.entries(mapping)) {
-        const el = document.getElementById(id);
-        if (el && el.textContent != val) el.textContent = val;
-    }
-}
+// ──────────────────────────────────────────────
+// 3. UI RENDERING
+// ──────────────────────────────────────────────
 
 function renderDashboard(accounts) {
     const grid = document.getElementById('sessions-grid');
     if (!grid) return;
+    
     const currentIds = new Set(accounts.map(a => `card-${a.clean_phone}`));
-    Array.from(grid.children).forEach(child => { if (!currentIds.has(child.id)) child.remove(); });
+    Array.from(grid.children).forEach(child => {
+        if (!currentIds.has(child.id)) child.remove();
+    });
+
     accounts.forEach(acc => {
         let card = document.getElementById(`card-${acc.clean_phone}`);
-        if (!card) { card = createCardNode(acc); grid.appendChild(card); }
+        if (!card) {
+            card = createCardNode(acc);
+            grid.appendChild(card);
+        }
         updateCardContent(card, acc);
     });
 }
@@ -111,8 +139,8 @@ function createCardNode(acc) {
           <button class="btn btn-p btn-sm btn-dispatch" style="flex:2">Dispatch</button>
           <button class="btn btn-s btn-sm btn-loop"><i class="fas fa-play"></i></button>
           <button class="btn btn-s btn-sm btn-settings"><i class="fas fa-cog"></i></button>
-          <button class="btn btn-s btn-sm btn-logout" title="Logout"><i class="fas fa-sign-out-alt"></i></button>
-          <button class="btn btn-d btn-sm btn-delete" title="Delete Account"><i class="fas fa-trash"></i></button>
+          <button class="btn btn-s btn-sm btn-logout" title="Logout Session"><i class="fas fa-sign-out-alt"></i></button>
+          <button class="btn btn-d btn-sm btn-delete" title="Delete Permanent"><i class="fas fa-trash"></i></button>
         </div>
     `;
     return card;
@@ -146,7 +174,6 @@ function updateCardContent(card, acc) {
 
     const dispatchBtn = card.querySelector('.btn-dispatch');
     const loopBtn = card.querySelector('.btn-loop');
-    const settingsBtn = card.querySelector('.btn-settings');
     const logoutBtn = card.querySelector('.btn-logout');
     const deleteBtn = card.querySelector('.btn-delete');
 
@@ -165,20 +192,32 @@ function updateCardContent(card, acc) {
         logoutBtn.style.display = 'inline-flex';
         logoutBtn.onclick = () => logoutAccount(acc.phone);
     }
-    settingsBtn.onclick = () => openSessionSettings(acc.clean_phone);
+    card.querySelector('.btn-settings').onclick = () => openSessionSettings(acc.clean_phone);
     deleteBtn.onclick = () => deleteAccount(acc.phone);
 }
 
+function updateGlobalStats(accounts) {
+    const stats = { total: accounts.length, active: accounts.filter(a => a.is_running).length, sent: accounts.reduce((s, a) => s + (a.sent || 0), 0), errors: accounts.reduce((s, a) => s + (a.errors || 0), 0) };
+    const mapping = { 'statTotal': stats.total, 'statActive': stats.active, 'statSent': stats.sent, 'statErrors': stats.errors };
+    for (const [id, val] of Object.entries(mapping)) {
+        const el = document.getElementById(id);
+        if (el && el.textContent != val) el.textContent = val;
+    }
+}
+
+// ──────────────────────────────────────────────
 // 4. API ACTIONS
+// ──────────────────────────────────────────────
+
 async function logoutAccount(phone) {
-    if (!confirm(`Logout ${phone}?`)) return;
+    if (!confirm(`Logout session ${phone}?`)) return;
     const data = await apiCall('/api/logout-account', { method: 'POST', body: JSON.stringify({phone}) });
     if (data.status === 'success') toast('Logged out');
 }
 
 async function manualDispatch(phone) {
     const data = await apiCall('/api/session/dispatch', { method: 'POST', body: JSON.stringify({phone}) });
-    toast(data.message, data.status === 'success' ? 'ok' : 'err');
+    toast(data.status === 'success' ? 'Dispatch triggered' : data.message, data.status === 'success' ? 'ok' : 'err');
 }
 
 async function toggleLoop(phone) {
@@ -186,7 +225,7 @@ async function toggleLoop(phone) {
     if (!acc) return;
     const endpoint = acc.is_running ? '/api/session/stop' : '/api/session/start';
     const data = await apiCall(endpoint, { method: 'POST', body: JSON.stringify({phone}) });
-    toast(data.message, data.status === 'success' ? 'ok' : 'err');
+    toast(data.status === 'success' ? (acc.is_running ? 'Stopped' : 'Started') : data.message, data.status === 'success' ? 'ok' : 'err');
 }
 
 async function openSessionSettings(phone) {
@@ -203,39 +242,34 @@ async function openSessionSettings(phone) {
 }
 
 async function saveSessionSettings() {
-    const payload = { phone: document.getElementById('edit-phone').value, source_channel: document.getElementById('edit-source').value, loop_interval: parseInt(document.getElementById('edit-interval').value), msg_delay: parseInt(document.getElementById('edit-delay').value), targets: document.getElementById('edit-targets').value.split('\n').map(x => x.trim()).filter(x => x) };
-    const data = await apiCall('/api/session/settings', { method: 'POST', body: JSON.stringify(payload) });
-    if (data.status === 'success') { toast('Saved'); closeModal(); } else toast(data.message, 'err');
-}
-
-function openGlobalSettings() { showModal('global-settings-modal'); }
-async function saveGlobalSettings() {
-    const fd = new FormData(); 
-    // Manual conversion for JWT consistency
-    const payload = {
-        api_id: document.getElementById('global-api-id').value,
-        api_hash: document.getElementById('global-api-hash').value,
-        source_channel: document.getElementById('global-source').value,
-        loop_interval: document.getElementById('global-interval').value,
-        msg_delay: document.getElementById('global-delay').value
+    const payload = { 
+        phone: document.getElementById('edit-phone').value, 
+        source_channel: document.getElementById('edit-source').value, 
+        loop_interval: parseInt(document.getElementById('edit-interval').value), 
+        msg_delay: parseInt(document.getElementById('edit-delay').value), 
+        targets: document.getElementById('edit-targets').value.split('\n').map(x => x.trim()).filter(x => x) 
     };
-    const data = await apiCall('/save-global', { method: 'POST', body: JSON.stringify(payload) });
-    if (data.status === 'success') { toast('Global Saved'); closeModal(); } else toast(data.message, 'err');
+    const data = await apiCall('/api/session/settings', { method: 'POST', body: JSON.stringify(payload) });
+    if (data.status === 'success') { toast('Settings Saved'); closeModal(); } else toast(data.message, 'err');
 }
 
 async function promptAddAccount() {
-    const phone = prompt("Phone (+):"); if (!phone) return;
+    const phone = prompt("Enter Phone Number (+):"); 
+    if (!phone) return;
     const data = await apiCall('/api/add-account', { method: 'POST', body: JSON.stringify({ phone: phone.trim() }) });
-    toast(data.message, data.status === 'success' ? 'ok' : 'err');
+    toast(data.status === 'success' ? 'Account added' : data.message, data.status === 'success' ? 'ok' : 'err');
 }
 
 async function deleteAccount(phone) {
-    if (!confirm(`Delete ${phone} permanently?`)) return;
+    if (!confirm(`Permanently delete ${phone}?`)) return;
     const data = await apiCall('/api/delete-account', { method: 'POST', body: JSON.stringify({phone}) });
-    toast(data.message);
+    toast(data.status === 'success' ? 'Deleted' : data.message);
 }
 
+// ──────────────────────────────────────────────
 // 5. AUTH FLOW
+// ──────────────────────────────────────────────
+
 let pendingAuth = {};
 function openLoginModal(phone) {
     pendingAuth.phone = phone;
@@ -244,34 +278,86 @@ function openLoginModal(phone) {
     document.getElementById('otp-step-2').classList.add('hidden');
     showModal('otp-modal');
 }
+
 async function sendOTP() {
+    const btn = document.querySelector('#otp-step-1 .btn-p');
+    btn.disabled = true; btn.textContent = 'Sending...';
     const payload = {
         api_id: document.getElementById('api-id').value,
         api_hash: document.getElementById('api-hash').value,
         phone: pendingAuth.phone
     };
     const data = await apiCall('/api/auth/send_code', { method: 'POST', body: JSON.stringify(payload) });
-    if (data.status === 'success') { pendingAuth.hash = data.phone_code_hash; document.getElementById('otp-step-1').classList.add('hidden'); document.getElementById('otp-step-2').classList.remove('hidden'); toast('OTP Sent'); } else toast(data.message, 'err');
+    btn.disabled = false; btn.textContent = 'Request Code';
+    if (data.status === 'success') { 
+        pendingAuth.hash = data.phone_code_hash; 
+        document.getElementById('otp-step-1').classList.add('hidden'); 
+        document.getElementById('otp-step-2').classList.remove('hidden'); 
+        toast('OTP Sent'); 
+    } else toast(data.message, 'err');
 }
+
 async function verifyOTP() {
+    const btn = document.querySelector('#otp-step-2 .btn-p');
+    btn.disabled = true; btn.textContent = 'Verifying...';
     const payload = {
         phone: pendingAuth.phone,
         phone_code_hash: pendingAuth.hash,
         code: document.getElementById('otp-code').value
     };
     const data = await apiCall('/api/auth/sign_in', { method: 'POST', body: JSON.stringify(payload) });
-    if (data.status === 'success') { toast('Verified!'); closeModal(); socket.emit('request_sync'); } else toast(data.message, 'err');
+    btn.disabled = false; btn.textContent = 'Verify Account';
+    if (data.status === 'success') { 
+        toast('Verified!'); 
+        closeModal(); 
+        await forceInitialSync();
+    } else toast(data.message, 'err');
 }
 
+// ──────────────────────────────────────────────
 // 6. UTILS
-function formatTime(ts) { if (!ts) return 'Never'; const d = new Date(ts * 1000); return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
-function toast(msg, type = 'ok') { 
-    const container = document.getElementById('toasts'); if (!container) return;
-    const t = document.createElement('div'); t.className = `toast t-${type}`; t.innerHTML = `<span>${msg}</span>`;
-    container.appendChild(t); setTimeout(() => t.classList.add('show'), 10);
-    setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 4000);
+// ──────────────────────────────────────────────
+
+function formatTime(ts) { 
+    if (!ts) return 'Never'; 
+    const d = new Date(ts * 1000); 
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); 
 }
-async function refreshLogs() { const logArea = document.getElementById('log-content'); if (!logArea) return; try { const r = await apiCall('/logs'); logArea.textContent = await r.text(); logArea.scrollTop = logArea.scrollHeight; } catch(e) {} }
+
+function toast(msg, type = 'ok') { 
+    const container = document.getElementById('toasts'); 
+    if (!container) return;
+    const t = document.createElement('div'); 
+    t.className = `toast t-${type}`; 
+    t.innerHTML = `<span>${msg}</span>`;
+    container.appendChild(t); 
+    setTimeout(() => t.classList.add('show'), 10);
+    setTimeout(() => { 
+        t.classList.remove('show'); 
+        setTimeout(() => t.remove(), 300); 
+    }, 4000);
+}
+
+async function refreshLogs() { 
+    const logArea = document.getElementById('log-content'); 
+    if (!logArea) return; 
+    const r = await apiCall('/logs'); 
+    logArea.textContent = r.text || r.message || "No logs."; 
+    logArea.scrollTop = logArea.scrollHeight; 
+}
+
 function showModal(id) { document.getElementById(id).style.display = 'flex'; }
 function closeModal() { document.querySelectorAll('.overlay').forEach(o => o.style.display = 'none'); }
-setInterval(refreshLogs, 5000);
+function openGlobalSettings() { showModal('global-settings-modal'); }
+
+async function saveGlobalSettings() {
+    const payload = {
+        api_id: document.getElementById('global-api-id').value,
+        api_hash: document.getElementById('global-api-hash').value,
+        source_channel: document.getElementById('global-source').value,
+        loop_interval: parseInt(document.getElementById('global-interval').value),
+        msg_delay: parseInt(document.getElementById('global-delay').value)
+    };
+    const data = await apiCall('/save-global', { method: 'POST', body: JSON.stringify(payload) });
+    if (data.status === 'success') { toast('Saved'); closeModal(); } else toast(data.message, 'err');
+}
