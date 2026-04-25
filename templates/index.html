@@ -5,6 +5,7 @@
 <title>ARMEDIAS — Control Panel</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
 
@@ -15,9 +16,9 @@
     <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
     Dashboard
   </div>
-  <div class="nav-item" data-tab="settings">
+  <div class="nav-item" onclick="openGlobalSettings()">
     <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
-    Settings
+    Global Config
   </div>
   <div class="nav-item" data-tab="logs">
     <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
@@ -36,12 +37,7 @@
   <div class="topbar">
     <h1 id="pageTitle">Dashboard</h1>
     <div class="controls">
-      <span class="sys-status"><span class="sys-dot" id="sysDot" style="background:{% if bot_running %}var(--green){% else %}var(--text3){% endif %}"></span><span id="sysLabel">{% if bot_running %}System Running{% else %}System Idle{% endif %}</span></span>
-      {% if not bot_running %}
-      <button class="btn btn-p" onclick="startBot()">▶ Start Dispatch</button>
-      {% else %}
-      <button class="btn btn-d" onclick="stopBot()">■ Stop Dispatch</button>
-      {% endif %}
+      <button class="btn btn-p" onclick="promptAddAccount()">+ Add New Account</button>
     </div>
   </div>
 
@@ -50,143 +46,97 @@
     <!-- ═══ DASHBOARD TAB ═══ -->
     <div id="dashboard-tab" class="tab active">
       <div class="stats">
-        <div class="stat-card"><div class="stat-label">Total Accounts</div><div class="stat-value" id="statTotal">{{ auth_status|length }}</div></div>
-        <div class="stat-card"><div class="stat-label">Authenticated</div><div class="stat-value" id="statActive">{{ auth_status|selectattr('authenticated')|list|length }}</div></div>
+        <div class="stat-card"><div class="stat-label">Total Accounts</div><div class="stat-value" id="statTotal">0</div></div>
+        <div class="stat-card"><div class="stat-label">Active Loops</div><div class="stat-value" id="statActive">0</div></div>
         <div class="stat-card"><div class="stat-label">Messages Sent</div><div class="stat-value" id="statSent">0</div></div>
         <div class="stat-card"><div class="stat-label">Errors</div><div class="stat-value" id="statErrors">0</div></div>
       </div>
 
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-        <div><h2 style="font-size:1.05rem;font-weight:600">Sender Accounts</h2><p style="font-size:.8rem;color:var(--text2)">Manage your Telegram delivery nodes</p></div>
-        <button class="btn btn-p" onclick="openAddModal()">+ Add Account</button>
+      <div class="grid" id="sessions-grid">
+        <!-- Rendered via app.js -->
       </div>
-
-      <div class="grid" id="accountGrid">
-        {% if auth_status %}
-          {% for acc in auth_status %}
-          <div class="card" id="card-{{ acc.clean_phone }}">
-            <div class="card-top">
-              <div class="card-profile">
-                <div class="avatar">{{ acc.phone[-2:] }}</div>
-                <div><div class="card-name">{{ acc.phone }}</div><div class="card-sub">session_{{ acc.clean_phone }}</div></div>
-              </div>
-              {% if acc.authenticated %}
-                <div class="badge b-active">Active</div>
-              {% else %}
-                <div class="badge b-unauth">Auth Required</div>
-              {% endif %}
-            </div>
-            <div class="card-meta">
-              <div>Status<span>{{ 'Dispatching' if bot_running and acc.authenticated else 'Idle' }}</span></div>
-              <div>Last Action<span>—</span></div>
-              <div>Sent<span>0</span></div>
-              <div>Errors<span>0</span></div>
-            </div>
-            {% if bot_running and acc.authenticated %}
-            <div class="pbar-wrap">
-              <div class="pbar-head"><span>Delivery</span><span>Active</span></div>
-              <div class="pbar"><div class="pbar-fill active" style="width:100%"></div></div>
-            </div>
-            {% endif %}
-            <div class="card-actions">
-              <button class="btn btn-s btn-sm" onclick="openTargetModal('{{ acc.phone }}', '{{ acc.clean_phone }}')">Targets</button>
-              {% if acc.authenticated %}
-                <button class="btn btn-d btn-sm" onclick="logoutAccount('{{ acc.phone }}')">Revoke</button>
-              {% else %}
-                <button class="btn btn-p btn-sm" onclick="requestOTP('{{ acc.phone }}','{{ acc.clean_phone }}')">Login via OTP</button>
-              {% endif %}
-            </div>
-          </div>
-          {% endfor %}
-        {% else %}
-          <div class="empty"><p>No accounts configured yet.</p><button class="btn btn-p" onclick="switchTab('settings')">Add Accounts</button></div>
-        {% endif %}
-      </div>
-    </div>
-
-    <!-- ═══ SETTINGS TAB ═══ -->
-    <div id="settings-tab" class="tab">
-      <form id="configForm">
-        <div class="scard">
-          <div class="stitle">API Credentials</div>
-          <div class="row2">
-            <div class="fg"><label>API ID</label><input type="number" id="g_api_id" name="api_id" value="{{ config.api_id }}" placeholder="From my.telegram.org"></div>
-            <div class="fg"><label>API Hash</label><input type="text" id="g_api_hash" name="api_hash" value="{{ config.api_hash }}" placeholder="From my.telegram.org"></div>
-          </div>
-          <div class="fg"><label>Phone Numbers</label><p class="hint">One per line with country code (e.g. +1234567890)</p><textarea name="phones" rows="5" placeholder="+1234567890">{{ config.phones }}</textarea></div>
-        </div>
-        <div class="scard">
-          <div class="stitle">Dispatch Config</div>
-          <div class="fg"><label>Source Channel ID</label><input type="text" name="source_channel" value="{{ config.source_channel }}" placeholder="-100123456789"></div>
-          <div class="row2">
-            <div class="fg"><label>Min Delay (sec)</label><input type="number" name="min_delay" value="{{ config.min_delay }}"></div>
-            <div class="fg"><label>Max Delay (sec)</label><input type="number" name="max_delay" value="{{ config.max_delay }}"></div>
-          </div>
-          <div class="fg"><label>Target Groups/Users</label><p class="hint">One per line</p><textarea name="targets" rows="6" placeholder="@group_name">{{ config.targets }}</textarea></div>
-          <div style="text-align:right;margin-top:16px"><button type="button" class="btn btn-p" onclick="saveConfig()">Save Changes</button></div>
-        </div>
-      </form>
     </div>
 
     <!-- ═══ LOGS TAB ═══ -->
     <div id="logs-tab" class="tab">
-      <div class="scard" style="max-width:100%">
-        <div class="stitle" style="display:flex;justify-content:space-between;align-items:center">
-          System Telemetry
-          <span style="font-size:.7rem;color:var(--green);font-weight:500;display:flex;align-items:center;gap:5px"><span style="width:5px;height:5px;border-radius:50%;background:var(--green)"></span>Live</span>
+      <div class="card" style="height: calc(100vh - 200px); display:flex; flex-direction:column">
+        <div style="display:flex; justify-content:space-between; margin-bottom:12px">
+          <h2 style="font-size:1rem; font-weight:600">Global System Logs</h2>
+          <button class="btn btn-s btn-sm" onclick="refreshLogs()">Refresh</button>
         </div>
-        <div class="log-box" id="logBox">Waiting for logs...</div>
+        <pre id="log-content" style="flex:1; background:#f8f9fa; border:1px solid var(--border); padding:16px; border-radius:8px; font-family:monospace; font-size:.85rem; overflow-y:auto; white-space:pre-wrap">Loading...</pre>
       </div>
     </div>
 
   </div>
 </div>
 
-<!-- TOASTS -->
+<!-- GLOBAL SETTINGS MODAL -->
+<div class="overlay" id="global-settings-modal">
+  <div class="modal" style="max-width: 500px; text-align: left;">
+    <h3>Global Configuration</h3>
+    <p style="color:var(--text2); font-size:.85rem; margin-bottom:16px">Manage Telegram API credentials and default settings.</p>
+    <div class="fg"><label>API ID</label><input type="text" id="global-api-id" class="input" value="{{ config.api_id }}"></div>
+    <div class="fg"><label>API Hash</label><input type="text" id="global-api-hash" class="input" value="{{ config.api_hash }}"></div>
+    <div class="fg"><label>Default Source Channel</label><input type="text" id="global-source" class="input" value="{{ config.source_channel }}"></div>
+    <div class="fg"><label>Default Interval (Min)</label><input type="number" id="global-interval" class="input" value="{{ config.loop_interval or 15 }}"></div>
+    <div style="display:flex; gap:10px; margin-top:20px">
+      <button class="btn btn-s" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-p" onclick="saveGlobalSettings()">Save Global Config</button>
+    </div>
+  </div>
+</div>
+
+<!-- SESSION SETTINGS MODAL -->
+<div class="overlay" id="settings-modal">
+  <div class="modal" style="max-width: 500px; text-align: left;">
+    <h3>Session Settings</h3>
+    <p id="modal-phone" style="color:var(--text2); font-size:.85rem; margin-bottom:16px"></p>
+    <input type="hidden" id="edit-phone">
+    <div class="fg"><label>Source Channel / Group</label><input type="text" id="edit-source" class="input" placeholder="@channel"></div>
+    <div class="fg"><label>Loop Interval (Minutes)</label><input type="number" id="edit-interval" class="input" min="1" placeholder="15"></div>
+    <div class="fg"><label>Target Users (One per line)</label><textarea id="edit-targets" class="input" rows="6" style="resize:vertical"></textarea></div>
+    <div style="display:flex; gap:10px; margin-top:20px">
+      <button class="btn btn-s" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-p" onclick="saveSessionSettings()">Save Settings</button>
+    </div>
+  </div>
+</div>
+
+<!-- OTP MODAL -->
+<div class="overlay" id="otp-modal">
+  <div class="modal" style="max-width: 400px; text-align: left;">
+    <h3>Telegram Auth</h3>
+    <p id="otp-phone-display" style="color:var(--text2); font-size:.85rem; margin-bottom:16px"></p>
+    <div id="otp-step-1">
+      <div class="fg"><label>API ID</label><input type="text" id="api-id" class="input" value="{{ config.api_id }}"></div>
+      <div class="fg"><label>API Hash</label><input type="text" id="api-hash" class="input" value="{{ config.api_hash }}"></div>
+      <button class="btn btn-p" style="width:100%" onclick="sendOTP()">Request Code</button>
+    </div>
+    <div id="otp-step-2" class="hidden">
+      <div class="fg"><label>Enter Verification Code</label><input type="text" id="otp-code" class="input" placeholder="00000" style="text-align:center; font-size:1.4rem; letter-spacing:4px"></div>
+      <button class="btn btn-p" style="width:100%" onclick="verifyOTP()">Verify Account</button>
+    </div>
+  </div>
+</div>
+
 <div id="toasts"></div>
 
-<!-- OTP MODAL -->
-<!-- ADD ACCOUNT MODAL -->
-<div class="overlay" id="addModal">
-  <div class="modal">
-    <h3>Add Telegram Account</h3>
-    <p>Enter a phone number with country code</p>
-    <input type="text" id="addPhoneInput" placeholder="+1234567890" style="width:100%;padding:10px;border-radius:7px;border:1px solid var(--border);font-size:1rem;margin-bottom:16px">
-    <div style="display:flex;gap:10px;justify-content:center">
-      <button class="btn btn-s" onclick="closeAddModal()">Cancel</button>
-      <button class="btn btn-p" id="addAccountBtn" onclick="handleAddAccount()">Save Account</button>
-    </div>
-  </div>
-</div>
-
-<!-- TARGET MODAL -->
-<div class="overlay" id="targetModal">
-  <div class="modal">
-    <h3>Account Targets</h3>
-    <p id="targetModalSubtitle">Set target groups for this account</p>
-    <input type="hidden" id="targetPhoneInput">
-    <textarea id="targetListInput" rows="6" placeholder="@group1\n@group2\n-100123456789" style="width:100%;padding:10px;border-radius:7px;border:1px solid var(--border);font-size:1rem;margin-bottom:16px;font-family:monospace"></textarea>
-    <div style="display:flex;gap:10px;justify-content:center">
-      <button class="btn btn-s" onclick="closeTargetModal()">Cancel</button>
-      <button class="btn btn-p" id="saveTargetsBtn" onclick="saveAccountTargets()">Save Targets</button>
-    </div>
-  </div>
-</div>
-
-<!-- OTP MODAL -->
-<div class="overlay" id="otpModal">
-  <div class="modal">
-    <h3>Verification Code</h3>
-    <p id="otpDesc">Enter the code sent to your Telegram app.</p>
-    <input type="text" id="otpInput" class="otp-input" placeholder="00000" maxlength="5" style="width:100%;padding:10px;border-radius:7px;border:1px solid var(--border);font-size:1.4rem;letter-spacing:8px;text-align:center;margin-bottom:16px">
-    <div style="display:flex;gap:10px;justify-content:center">
-      <button class="btn btn-s" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-p" id="verifyBtn">Verify</button>
-    </div>
-  </div>
-</div>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
-<script src="{{ url_for('static', filename='app.js') }}"></script>
+<script src="{{ url_for('static', filename='app.js') }}?v=1.2"></script>
+<script>
+  // Simple Tab Logic
+  document.querySelectorAll('.nav-item[data-tab]').forEach(item => {
+    item.addEventListener('click', () => {
+      const tabId = item.getAttribute('data-tab');
+      document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+      document.getElementById(tabId + '-tab').classList.add('active');
+      document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+      item.classList.add('active');
+      document.getElementById('pageTitle').textContent = item.textContent.trim();
+    });
+  });
+  function closeModal() { document.querySelectorAll('.overlay').forEach(o => o.style.display = 'none'); }
+</script>
 </body>
 </html>

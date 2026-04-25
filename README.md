@@ -1,43 +1,27 @@
-# Telegram Multi-Account Bulk Messenger (Elyndor Interactive Edition)
+# ARMEDIAS AI — Production Messaging Automation Hub
 
-Professional automation tool for monitoring channels and bulk forwarding messages with multiple account rotation and anti-spam protection.
+A professional, scalable, and session-based Telegram automation platform.
 
-## 🚀 Key Features
--   **Web Admin Dashboard:** Manage everything from your browser.
--   **Bulk Account Support:** Use 20+ accounts with a single API ID/Hash.
--   **Official Forwarding:** Messages show the "Forwarded from..." tag.
--   **Anti-Spam Security:** Randomized 10-15 minute delays and round-robin rotation.
--   **Session Manager:** Easily clear and reset logins from the UI.
+## 🏗 Architecture
+- **Entry**: `app.py` (Flask + SocketIO)
+- **Engine**: `core/bot_manager.py` (Orchestrator) & `core/bot_worker.py` (Independent Account Workers)
+- **Routing**: `api/routes.py` (Modular Controller)
+- **Utilities**: `utils/logger.py` & `utils/config_loader.py`
+- **Frontend**: Vanilla JS with Optimized DOM Diffing
 
-## 🛠️ Setup Instructions
+## 🚀 Deployment
+1. Install dependencies: `pip install flask flask-socketio flask-cors pyrogram tgcrypto`
+2. Launch: `python app.py`
+3. Access: `http://localhost:5001`
 
-### 1. Install Dependencies
-```bash
-pip install -r requirements.txt
-```
+## ⚙️ Features
+- **Independent Sessions**: Each account runs its own process loop.
+- **Dynamic Intervals**: Change loop timing in real-time without restarts.
+- **Anti-Flood Protection**: Integrated FloodWait handling and exponential backoff.
+- **Real-time Monitoring**: Live status updates via WebSockets.
+- **Production Logging**: Rotating logs in `logs/bot.log`.
 
-### 2. Launch the Admin Panel
-Run:
-```bash
-python app.py
-```
-
-### 3. Open the Dashboard
-Go to: 👉 **http://localhost:5000**
-
-### 4. Configuration
-1.  Enter your **Global API ID** and **API Hash**.
-2.  Paste your **list of Phone Numbers** (one per line).
-3.  Enter the **Source Channel ID** (found in logs after clicking Start).
-4.  Paste your **Target List** (usernames like @user1).
-5.  Click **Save All Configuration**.
-
-### 5. Start Automation
-Click **"🚀 Start Automation"**. 
-*Note: For first-time setup, new terminal windows will appear for each phone number. Enter the Telegram Login Code in each window.*
-
----
-
-## 🔒 License Notice
-This is a **Trial Version** restricted to **5 messages** for validation purposes. 
-**Contact Elyndor Interactive for the full, unlimited license.**
+## 🔐 Security
+- **Admin Authentication**: Secure login required for dashboard access.
+- **Session Isolation**: Each account has its own isolated `.session` file.
+- **Encrypted Communication**: Powered by Pyrogram's MTProto.

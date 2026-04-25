@@ -3,10 +3,28 @@
     "api_hash": "e13c7b4d23a8eab7ee03ac2917ca59a2",
     "phones": "+91 9310362649\n+91 7701897557",
     "source_channel": "-1003994773870",
-    "targets": "@youtubers_sub_4_sub_sub4sub\r\n@GUfiCOwW3hQ4NWJl\r\n@youtube_watch_time0\r\n@free_promotion_group11",
-    "min_delay": 5,
-    "max_delay": 10,
-    "account_targets": {
-        "+91 9310362649": "https://t.me/Itsmearyan_abc\n@Armedia_007\n"
+    "loop_interval": 15,
+    "targets": [
+        "@youtubers_sub_4_sub_sub4sub",
+        "@GUfiCOwW3hQ4NWJl",
+        "@youtube_watch_time0",
+        "@free_promotion_group11"
+    ],
+    "account_settings": {
+        "919310362649": {
+            "source_channel": "-1003994773870",
+            "loop_interval": 15,
+            "targets": [
+                "@Itsmearyan_abc",
+                "@Armedia_007"
+            ],
+            "is_loop_active": false
+        },
+        "917701897557": {
+            "source_channel": "-1003994773870",
+            "loop_interval": 15,
+            "targets": [],
+            "is_loop_active": false
+        }
     }
 }
