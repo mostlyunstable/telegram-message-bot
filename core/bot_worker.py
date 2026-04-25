@@ -1,23 +1,25 @@
 import asyncio
 import time
-from enum import Enum
-from typing import Optional, List
+import random
+import traceback
+from typing import List, Dict, Optional
 from pyrogram import Client, filters, handlers
 from pyrogram.types import Message
 from pyrogram.errors import (
     FloodWait, PeerFlood, UserPrivacyRestricted,
     ChatWriteForbidden, UserBannedInChannel, AuthKeyUnregistered
 )
-from utils.logger import logger
 
-class WorkerState(str, Enum):
-    IDLE      = "idle"
-    SENDING   = "sending"
-    COOLDOWN  = "cooldown"
-    STOPPED   = "stopped"
-    UNAUTH    = "unauth"
+from utils.logger import logger
+from core.services.progress_tracker import ProgressTracker
+from core.services.loop_manager import LoopManager
+from core.services.config_service import config_service
 
 class BotWorker:
+    """
+    High-level session worker.
+    Uses dedicated services for dispatching, progress tracking, and loop management.
+    """
     def __init__(self, client: Client, phone: str, clean_phone: str, 
                  targets: List[str], source_channel: str, loop_interval: int,
                  global_semaphore: asyncio.Semaphore):
@@ -29,155 +31,197 @@ class BotWorker:
         self.loop_interval = max(1, int(loop_interval))
         self.global_semaphore = global_semaphore
         
-        self.state = WorkerState.IDLE
-        self.sent = 0
-        self.errors = 0
-        self.last_action = "Ready"
-        self.last_dispatch_time = 0.0
-        self.cooldown_until = 0.0
+        # Services
+        self.progress = ProgressTracker()
+        self.scheduler = LoopManager(phone)
+        self.worker_manager = LoopManager(f"{phone}_worker")
         
-        self.is_loop_active = False
+        self.msg_delay = 5
+        self.is_running = False
         self.queue = asyncio.Queue()
-        self._dispatch_lock = asyncio.Lock() # Prevent race conditions on dispatch trigger
+        self._dispatch_lock = asyncio.Lock()
         
-        self._worker_task: Optional[asyncio.Task] = None
-        self._loop_task: Optional[asyncio.Task] = None
-        self._handler_group = 1 
-        
+        # State tracking
         self.current_msg_id = None
         self.current_from_chat = None
         self._new_msg_event = asyncio.Event()
+        self.cooldown_until = 0.0
 
-    def start(self):
-        if self._worker_task and not self._worker_task.done(): return
-        self._worker_task = asyncio.create_task(self._process_queue())
-        self._setup_monitor()
-        self.is_loop_active = True
-        if self.current_msg_id: self._start_scheduler()
-        logger.info(f"[{self.phone}] Worker activated.")
+    async def start(self):
+        """Bug Fix 5: Ensure no duplicate starts and return safe response."""
+        if self.is_running:
+            return False, "Already running"
+        
+        self.is_running = True
+        await self.worker_manager.start_loop(self._process_queue)
+        await self._setup_monitor()
+        
+        if self.current_msg_id:
+            await self._start_scheduler()
+            
+        logger.info(f"[{self.phone}] Worker started successfully.")
+        return True, "Started"
 
-    def stop(self):
-        self.is_loop_active = False
-        if self._worker_task: self._worker_task.cancel()
-        if self._loop_task: self._loop_task.cancel()
-        self._remove_monitor()
-        self.state = WorkerState.STOPPED
+    async def stop(self):
+        self.is_running = False
+        await self.worker_manager.stop_loop()
+        await self.scheduler.stop_loop()
+        await self._remove_monitor()
+        await self.progress.set_action("Stopped")
+        logger.info(f"[{self.phone}] Worker stopped.")
 
-    def update_settings(self, source: str, interval: int, targets: List[str]):
+    async def update_settings(self, source: str, interval: int, targets: List[str], delay: int = 5):
         self.source_channel = str(source).strip()
         self.loop_interval = max(1, int(interval))
         self.targets = [t.strip() for t in targets if t.strip()]
-        self._remove_monitor()
-        self._setup_monitor()
-        if self.is_loop_active: self._start_scheduler()
+        self.msg_delay = max(0, int(delay))
+        
+        await self._remove_monitor()
+        await self._setup_monitor()
+        if self.is_running:
+            await self._start_scheduler()
 
-    def _start_scheduler(self):
-        if self._loop_task: self._loop_task.cancel()
-        self._loop_task = asyncio.create_task(self._reforward_scheduler())
+    async def _start_scheduler(self):
+        await self.scheduler.start_loop(self._reforward_scheduler)
 
-    def _setup_monitor(self):
+    def _get_resolved_source(self):
+        if self.source_channel and self.source_channel.strip():
+            return self.source_channel
+        config = config_service.load()
+        return config.get("source_channel", "").strip()
+
+    async def _setup_monitor(self):
         if not self.client.is_connected: return
+        resolved = self._get_resolved_source()
+        if not resolved: return
+
         async def dynamic_filter(_, __, m: Message):
-            if not m.chat or not self.source_channel: return False
-            target = self.source_channel.lower().replace("@", "")
-            return str(m.chat.id) == self.source_channel or (m.chat.username or "").lower() == target
+            if not m.chat: return False
+            target = resolved.lower().replace("@", "")
+            return str(m.chat.id) == resolved or (m.chat.username or "").lower() == target
+            
         async def on_new_message(client, message: Message):
             await self.trigger_dispatch(message.chat.id, message.id)
-        self.client.add_handler(handlers.MessageHandler(on_new_message, filters.create(dynamic_filter)), group=self._handler_group)
+            
+        self.client.add_handler(handlers.MessageHandler(on_new_message, filters.create(dynamic_filter)), group=1)
 
-    def _remove_monitor(self):
+    async def _remove_monitor(self):
         if self.client.is_connected:
-            try: self.client.remove_handler(None, group=self._handler_group)
+            try: self.client.remove_handler(None, group=1)
             except: pass
 
     async def trigger_dispatch(self, from_chat_id: int, message_id: int):
-        """Atomic dispatch trigger to prevent duplicate queues from spam-clicks or rapid events."""
+        """Bug Fix 6: Prevent duplicate triggers using a lock."""
         async with self._dispatch_lock:
+            if not self.targets:
+                await self.progress.set_action("Error: No targets")
+                return False
+                
             self.current_msg_id = message_id
             self.current_from_chat = from_chat_id
+            
+            # Reset progress tracking for new batch
+            await self.progress.reset(len(self.targets))
+            
+            # Drain queue
             while not self.queue.empty():
                 try: self.queue.get_nowait()
                 except asyncio.QueueEmpty: break
+                
             for target in self.targets:
                 await self.queue.put(target)
-            self.last_dispatch_time = time.time()
+            
             self._new_msg_event.set()
-            if self.is_loop_active and (not self._loop_task or self._loop_task.done()):
-                self._start_scheduler()
+            if self.is_running and not self.scheduler.is_running:
+                await self._start_scheduler()
+            return True
 
     async def _reforward_scheduler(self):
         try:
-            while self.is_loop_active:
+            while self.is_running:
                 self._new_msg_event.clear()
                 try:
                     await asyncio.wait_for(self._new_msg_event.wait(), timeout=self.loop_interval * 60)
                     continue 
                 except asyncio.TimeoutError:
                     if self.current_msg_id:
+                        logger.info(f"[{self.phone}] Loop trigger: Re-forwarding...")
+                        await self.progress.reset(len(self.targets))
                         for target in self.targets: await self.queue.put(target)
-                        self.last_dispatch_time = time.time()
         except asyncio.CancelledError: pass
 
     async def _process_queue(self):
-        while True:
+        """Queue processor with optimized progress tracking and delay control."""
+        while self.is_running:
             try:
+                # Handle Cooldown
                 while self.cooldown_until > time.monotonic():
-                    self.state = WorkerState.COOLDOWN
+                    rem = int(self.cooldown_until - time.monotonic())
+                    await self.progress.set_action(f"Cooldown: {rem}s")
                     await asyncio.sleep(1)
                 
                 target = await self.queue.get()
-                self.state = WorkerState.SENDING
                 
-                # Global Throttle: Respect the system-wide limit
                 async with self.global_semaphore:
-                    success = await self._send_msg(target)
+                    success, err = await self._send_msg(target)
                 
-                if success: self.sent += 1
-                else: self.errors += 1
+                if success:
+                    await self.progress.mark_success(target)
+                else:
+                    await self.progress.mark_failure(target, err)
                 
-                if self.state != WorkerState.UNAUTH:
-                    self.state = WorkerState.IDLE
+                # Bug Fix 2: Apply delay AFTER EACH MESSAGE
+                if not self.queue.empty() and self.is_running:
+                    jitter = random.randint(1, 3) if self.msg_delay > 0 else 0
+                    total_delay = self.msg_delay + jitter
+                    if total_delay > 0:
+                        await self.progress.set_action(f"Next in {total_delay}s...")
+                        await asyncio.sleep(total_delay)
+                
                 self.queue.task_done()
+                
+                if self.queue.empty():
+                    await self.progress.set_action("Idle (Waiting for new source msg or interval)")
+                    
             except asyncio.CancelledError: break
             except Exception as e:
-                logger.error(f"[{self.phone}] Critical loop error: {e}")
+                logger.error(f"[{self.phone}] Worker error: {e}\n{traceback.format_exc()}")
                 await asyncio.sleep(5)
 
     async def _send_msg(self, target: str):
+        """Bug Fix 7: Meaningful error handling."""
         for attempt in range(1, 4):
             try:
-                self.last_action = f"Forwarding: {target}"
-                await self.client.forward_messages(chat_id=target, from_chat_id=self.current_from_chat, message_ids=self.current_msg_id)
-                logger.info(f"[{self.phone}] ✅ Delivered to {target}")
-                return True
+                await self.client.forward_messages(
+                    chat_id=target, 
+                    from_chat_id=self.current_from_chat, 
+                    message_ids=self.current_msg_id
+                )
+                logger.info(f"[{self.phone}] Delivered to {target}")
+                return True, ""
             except AuthKeyUnregistered:
-                self.state = WorkerState.UNAUTH
-                self.last_action = "Session Revoked"
-                self.stop()
-                return False
+                await self.stop()
+                return False, "Session Expired"
             except FloodWait as e:
-                wait = e.value + 5
-                self.cooldown_until = time.monotonic() + wait
-                self.last_action = f"FloodWait ({wait}s)"
-                await self.queue.put(target)
-                return False
-            except (PeerFlood, UserPrivacyRestricted, ChatWriteForbidden, UserBannedInChannel):
-                self.last_action = f"Blocked by {target}"
-                return False
+                self.cooldown_until = time.monotonic() + e.value + 5
+                return False, f"FloodWait ({e.value}s)"
+            except (PeerFlood, UserPrivacyRestricted, ChatWriteForbidden, UserBannedInChannel) as e:
+                return False, type(e).__name__
             except Exception as e:
                 if attempt < 3: await asyncio.sleep(2 ** attempt)
-                else: 
-                    self.last_action = f"Error: {type(e).__name__}"
-                    return False
-        return False
+                else: return False, str(e)
+        return False, "Max Retries"
 
     def to_dict(self):
+        stats = self.progress.get_stats()
         cd_rem = max(0, int(self.cooldown_until - time.monotonic()))
         return {
             "phone": self.phone, "clean_phone": self.clean_phone,
-            "state": self.state.value, "sent": self.sent, "errors": self.errors,
-            "last_action": self.last_action, "last_dispatch_time": self.last_dispatch_time,
+            "is_running": self.is_running,
+            "state": "sending" if stats["progress"] < 100 and stats["total"] > 0 else "idle",
+            "sent": stats["sent"], "errors": stats["failed"], "total": stats["total"],
+            "last_action": stats["last_action"], "progress": stats["progress"],
             "targets_count": len(self.targets), "source_channel": self.source_channel,
-            "loop_interval": self.loop_interval, "is_loop_active": self.is_loop_active,
-            "cooldown_remaining": cd_rem
+            "loop_interval": self.loop_interval, "is_loop_active": self.is_running,
+            "cooldown_remaining": cd_rem, "msg_delay": self.msg_delay
         }

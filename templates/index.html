@@ -80,8 +80,9 @@
     <div class="fg"><label>API Hash</label><input type="text" id="global-api-hash" class="input" value="{{ config.api_hash }}"></div>
     <div class="fg"><label>Default Source Channel</label><input type="text" id="global-source" class="input" value="{{ config.source_channel }}"></div>
     <div class="fg"><label>Default Interval (Min)</label><input type="number" id="global-interval" class="input" value="{{ config.loop_interval or 15 }}"></div>
+    <div class="fg"><label>Delay Between Messages (Seconds)</label><input type="number" id="global-delay" class="input" value="{{ config.msg_delay or 5 }}"></div>
     <div style="display:flex; gap:10px; margin-top:20px">
-      <button class="btn btn-s" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-s" onclick="closeModal()"><i class="fas fa-arrow-left"></i> Back</button>
       <button class="btn btn-p" onclick="saveGlobalSettings()">Save Global Config</button>
     </div>
   </div>
@@ -93,11 +94,12 @@
     <h3>Session Settings</h3>
     <p id="modal-phone" style="color:var(--text2); font-size:.85rem; margin-bottom:16px"></p>
     <input type="hidden" id="edit-phone">
-    <div class="fg"><label>Source Channel / Group</label><input type="text" id="edit-source" class="input" placeholder="@channel"></div>
+    <div class="fg"><label>Source Channel / Group</label><input type="text" id="edit-source" class="input" placeholder="@channel (Leave empty for Global)"></div>
     <div class="fg"><label>Loop Interval (Minutes)</label><input type="number" id="edit-interval" class="input" min="1" placeholder="15"></div>
+    <div class="fg"><label>Delay Between Messages (Seconds)</label><input type="number" id="edit-delay" class="input" min="0" placeholder="5"></div>
     <div class="fg"><label>Target Users (One per line)</label><textarea id="edit-targets" class="input" rows="6" style="resize:vertical"></textarea></div>
     <div style="display:flex; gap:10px; margin-top:20px">
-      <button class="btn btn-s" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-s" onclick="closeModal()"><i class="fas fa-arrow-left"></i> Back</button>
       <button class="btn btn-p" onclick="saveSessionSettings()">Save Settings</button>
     </div>
   </div>
@@ -111,11 +113,17 @@
     <div id="otp-step-1">
       <div class="fg"><label>API ID</label><input type="text" id="api-id" class="input" value="{{ config.api_id }}"></div>
       <div class="fg"><label>API Hash</label><input type="text" id="api-hash" class="input" value="{{ config.api_hash }}"></div>
-      <button class="btn btn-p" style="width:100%" onclick="sendOTP()">Request Code</button>
+      <div style="display:flex; gap:10px">
+        <button class="btn btn-s" style="flex:1" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-p" style="flex:2" onclick="sendOTP()">Request Code</button>
+      </div>
     </div>
     <div id="otp-step-2" class="hidden">
       <div class="fg"><label>Enter Verification Code</label><input type="text" id="otp-code" class="input" placeholder="00000" style="text-align:center; font-size:1.4rem; letter-spacing:4px"></div>
-      <button class="btn btn-p" style="width:100%" onclick="verifyOTP()">Verify Account</button>
+      <div style="display:flex; gap:10px">
+        <button class="btn btn-s" style="flex:1" onclick="closeModal()">Back</button>
+        <button class="btn btn-p" style="flex:2" onclick="verifyOTP()">Verify Account</button>
+      </div>
     </div>
   </div>
 </div>
